@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mechatronic Maestro: 2-Joint Robotic Arm Simulation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+        xintegrity="sha384-n8MVd4RsNIU0KOVEMcAgsccwsMXk/8Dpag8V3+EvgmUjDDJHCEPysqsA4xgLeQGC" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"
+        xintegrity="sha384-XjKyOOlGwcjNTAIQHIpgOno0Hl1YQqzUOEleOLALmuqehneUG+vnGctmUbKyIyuh"
+        crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        xintegrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05"
+        crossorigin="anonymous"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .control-panel {
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: transform 0.3s ease-in-out;
+        }
+
+        canvas {
+            cursor: crosshair;
+            background-color: #111827;
+            /* bg-gray-900 */
+        }
+
+        .glowing-text {
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.7), 0 0 10px rgba(0, 195, 255, 0.7);
+        }
+
+        /* Style for the explanation modal content */
+        #gemini-analysis-content h3,
+        #process-explanation-content h3 {
+            color: #67e8f9;
+            /* cyan-300 */
+            font-weight: 700;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid #374151;
+            /* gray-700 */
+            padding-bottom: 0.25rem;
+        }
+
+        #gemini-analysis-content p,
+        #process-explanation-content p {
+            margin-bottom: 0.75rem;
+            line-height: 1.6;
+        }
+
+        #gemini-analysis-content ul,
+        #process-explanation-content ul {
+            list-style-type: disc;
+            padding-left: 1.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        #gemini-analysis-content li,
+        #process-explanation-content li {
+            margin-bottom: 0.25rem;
+        }
+
+        /* KaTeX styling overrides for dark mode */
+        .katex {
+            color: #E5E7EB;
+            /* gray-200 */
+        }
+    </style>
+</head>
+
+<body class="bg-gray-800 text-white flex flex-col h-screen">
+
+    <header class="w-full p-4 bg-gray-900/50 border-b border-gray-700/80 text-center relative">
+        <h1 class="text-3xl font-bold tracking-wider glowing-text">Mechatronic Maestro</h1>
+        <p class="text-cyan-300 mt-1">Inverse Kinematics & Path Simulation</p>
+        <button id="explain-process-btn"
+            class="absolute top-1/2 -translate-y-1/2 right-4 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2 text-sm">
+            <span>🔬 Explain Core Concepts</span>
+        </button>
+    </header>
+
+    <main id="simulation-container" class="flex-grow relative w-full overflow-hidden">
+        <canvas id="robotCanvas"></canvas>
+        <button id="toggle-controls-btn"
+            class="absolute bottom-4 right-4 z-10 bg-cyan-500 hover:bg-cyan-400 text-white font-bold w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg shadow-cyan-500/50 transition-all duration-300 transform">
+            <span id="toggle-icon" class="text-2xl transition-transform duration-300">▲</span>
+        </button>
+    </main>
+
+    <footer id="control-panel-container" class="w-full">
+        <div id="control-panel-content" class="control-panel bg-gray-800/50 p-2 border-t-2 border-gray-700/80 w-full">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-2 items-center max-w-7xl mx-auto">
+                <div class="flex flex-col">
+                    <label for="l1" class="text-sm font-medium text-cyan-200 mb-0.5">Arm 1 Length (L1)</label>
+                    <input type="number" id="l1" value="120"
+                        class="bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition">
+                </div>
+                <div class="flex flex-col">
+                    <label for="l2" class="text-sm font-medium text-cyan-200 mb-0.5">Arm 2 Length (L2)</label>
+                    <input type="number" id="l2" value="100"
+                        class="bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-1.5 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition">
+                </div>
+
+                <div class="bg-gray-900/50 p-1.5 rounded-lg col-span-1 md:col-span-2">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs text-center">
+                        <div class="flex justify-center items-center space-x-1"><span
+                                class="font-semibold text-cyan-400">θ1:</span> <span id="theta1-display"
+                                class="font-mono">0.00°</span></div>
+                        <div class="flex justify-center items-center space-x-1"><span
+                                class="font-semibold text-cyan-400">θ2:</span> <span id="theta2-display"
+                                class="font-mono">0.00°</span></div>
+                        <div class="flex justify-center items-center space-x-1"><span
+                                class="font-semibold text-cyan-400">Target:</span> <span id="target-display"
+                                class="font-mono">(0, 0)</span></div>
+                        <div class="flex items-center justify-center space-x-1"><span
+                                class="font-semibold text-cyan-400">Collision:</span> <span id="collision-status"
+                                class="w-3 h-3 rounded-full bg-green-500 transition-colors"></span></div>
+                    </div>
+                </div>
+                <div class="col-span-1 md:col-span-4 grid grid-cols-3 gap-2 mt-0.5">
+                    <input type="number" id="target-x" placeholder="Target X"
+                        class="bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-1 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition text-center">
+                    <input type="number" id="target-y" placeholder="Target Y"
+                        class="bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-1 focus:ring-2 focus:ring-cyan-500 focus:outline-none transition text-center">
+                    <button id="set-target-btn"
+                        class="bg-teal-600 hover:bg-teal-500 text-white font-semibold py-1 rounded-lg transition-colors">Set
+                        Target</button>
+                </div>
+
+                <div class="col-span-1 md:col-span-4 text-center mt-1 -mb-1"><label
+                        class="text-sm font-medium text-cyan-200">Obstacle Controls (X, Y, Radius)</label></div>
+                <div class="col-span-1 md:col-span-4 grid grid-cols-3 gap-2 mt-0.5">
+                    <input type="number" id="obstacle-x" value="150"
+                        class="bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition text-center">
+                    <input type="number" id="obstacle-y" value="-120"
+                        class="bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition text-center">
+                    <input type="number" id="obstacle-radius" value="30"
+                        class="bg-gray-700 text-white border border-gray-600 rounded-md px-3 py-1 focus:ring-2 focus:ring-indigo-500 focus:outline-none transition text-center">
+                </div>
+
+                <div class="col-span-1 md:col-span-4 flex justify-center mt-1">
+                    <button id="gemini-analysis-btn" disabled
+                        class="bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-1.5 px-6 rounded-lg transition-colors flex items-center justify-center space-x-2 text-sm">
+                        <span>✨ Generate Enhanced Movement Analysis</span>
+                    </button>
+                </div>
+            </div>
+            <p class="text-xs text-gray-400 text-center mt-1">Click on the canvas to set a target or manually enter
+                coordinates.</p>
+        </div>
+    </footer>
+
+    <div id="unreachable-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+        <div
+            class="bg-red-800/80 border-2 border-red-500 text-white p-6 rounded-xl shadow-2xl text-center max-w-sm w-full">
+            <h2 class="text-2xl font-bold mb-2">Target Unreachable</h2>
+            <p class="mb-4">The specified coordinate is outside the arm's range.</p>
+            <div class="flex flex-col sm:flex-row gap-2 justify-center">
+                <button onclick="document.getElementById('unreachable-modal').classList.add('hidden')"
+                    class="bg-gray-600 hover:bg-gray-500 px-5 py-2 rounded-md font-semibold transition-colors">Acknowledge</button>
+                <button id="gemini-suggest-btn"
+                    class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-md font-semibold transition-colors flex items-center justify-center space-x-2"><span>✨
+                        Suggest Reachable Target</span></button>
+            </div>
+        </div>
+    </div>
+
+    <div id="gemini-analysis-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-40">
+        <div class="bg-gray-800 border-2 border-cyan-500/50 text-white p-6 rounded-xl shadow-2xl max-w-3xl w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-cyan-300">✨ Movement Analysis</h2><button
+                    onclick="document.getElementById('gemini-analysis-modal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div id="gemini-analysis-content" class="text-gray-300 max-h-[70vh] overflow-y-auto pr-2 text-sm"></div>
+        </div>
+    </div>
+
+    <div id="process-explanation-modal"
+        class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-40">
+        <div class="bg-gray-800 border-2 border-indigo-500/50 text-white p-6 rounded-xl shadow-2xl max-w-3xl w-full">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold text-indigo-300">🔬 Core Concepts Explanation</h2><button
+                    onclick="document.getElementById('process-explanation-modal').classList.add('hidden')"
+                    class="text-gray-400 hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div id="process-explanation-content" class="text-gray-300 max-h-[70vh] overflow-y-auto pr-2 text-sm"></div>
+        </div>
+    </div>
+
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+        <div class="flex flex-col items-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-4 border-cyan-400"></div>
+            <p class="mt-4 text-lg text-cyan-200">Communicating with Gemini...</p>
+        </div>
+    </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // This ensures KaTeX's auto-render function is available globally when needed
+            if (window.renderMathInElement) {
+                // It's already loaded, no action needed.
+            }
+        });
+
+        const canvas = document.getElementById('robotCanvas');
+        const ctx = canvas.getContext('2d');
+        const container = document.getElementById('simulation-container');
+
+        // --- DOM Elements ---
+        const l1Input = document.getElementById('l1');
+        const l2Input = document.getElementById('l2');
+        const theta1Display = document.getElementById('theta1-display');
+        const theta2Display = document.getElementById('theta2-display');
+        const targetDisplay = document.getElementById('target-display');
+        const collisionStatus = document.getElementById('collision-status');
+        const unreachableModal = document.getElementById('unreachable-modal');
+        const geminiAnalysisBtn = document.getElementById('gemini-analysis-btn');
+        const geminiSuggestBtn = document.getElementById('gemini-suggest-btn');
+        const geminiAnalysisModal = document.getElementById('gemini-analysis-modal');
+        const geminiAnalysisContent = document.getElementById('gemini-analysis-content');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const targetXInput = document.getElementById('target-x');
+        const targetYInput = document.getElementById('target-y');
+        const setTargetBtn = document.getElementById('set-target-btn');
+        const toggleControlsBtn = document.getElementById('toggle-controls-btn');
+        const controlPanelContent = document.getElementById('control-panel-content');
+        const explainProcessBtn = document.getElementById('explain-process-btn');
+        const processExplanationModal = document.getElementById('process-explanation-modal');
+        const processExplanationContent = document.getElementById('process-explanation-content');
+        const obstacleXInput = document.getElementById('obstacle-x');
+        const obstacleYInput = document.getElementById('obstacle-y');
+        const obstacleRadiusInput = document.getElementById('obstacle-radius');
+
+        // --- Simulation State ---
+        let base = { x: 0, y: 0 };
+        let l1 = parseInt(l1Input.value);
+        let l2 = parseInt(l2Input.value);
+        let currentTheta1 = Math.PI / 4;
+        let currentTheta2 = Math.PI / 2;
+        let target = null; // Will store world coordinates {x, y}
+        let lastMovementData = null;
+        let lastUnreachableTarget = null;
+        let controlsVisible = true;
+
+        // --- View State (Pan & Zoom) ---
+        let scale = 1.0;
+        let panOffset = { x: 0, y: 0 };
+        let isPanning = false;
+        let startPanPoint = { x: 0, y: 0 };
+
+        // --- Animation State ---
+        let animationId;
+        let animationStartTime;
+        let startAngles = { theta1: currentTheta1, theta2: currentTheta2 };
+        let targetAngles = { theta1: currentTheta1, theta2: currentTheta2 };
+        const animationDuration = 1000;
+
+        let obstacle = { x: 150, y: -120, radius: 30 };
+        const toRadians = (deg) => deg * Math.PI / 180;
+        const toDegrees = (rad) => rad * 180 / Math.PI;
+
+        // --- Gemini API ---
+        function showLoading() { loadingOverlay.classList.remove('hidden'); }
+        function hideLoading() { loadingOverlay.classList.add('hidden'); }
+
+        async function callGemini(payload, retries = 3, delay = 1000) {
+            showLoading();
+            // CALL YOUR VERCEL PROXY ENDPOINT
+            const proxyUrl = '/api/gemini-proxy';
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(proxyUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        // Read and throw the error from the serverless function
+                        const errorBody = await response.json();
+                        throw new Error(`Proxy error: ${response.status}. Details: ${JSON.stringify(errorBody)}`);
+                    }
+
+                    // The proxy already formats the response, so we just return the raw text/JSON
+                    const responseText = await response.text();
+                    hideLoading();
+                    return responseText;
+
+                } catch (error) {
+                    console.error(`Gemini API call failed (attempt ${i + 1}):`, error);
+                    if (i < retries - 1) {
+                        await new Promise(res => setTimeout(res, delay));
+                        delay *= 2;
+                    } else {
+                        hideLoading();
+                        alert("Failed to get a response from Gemini after multiple attempts.");
+                        return null;
+                    }
+                }
+            }
+        }
+
+        // --- Canvas and Drawing ---
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            base.x = canvas.width / 2;
+            base.y = canvas.height / 2;
+            draw();
+        }
+
+        function drawGridAndNumbers() {
+            const step = 50;
+            const worldView = {
+                left: -((base.x + panOffset.x) / scale),
+                right: (canvas.width - (base.x + panOffset.x)) / scale,
+                top: (base.y + panOffset.y) / scale,
+                bottom: -((canvas.height - (base.y + panOffset.y)) / scale)
+            };
+
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+            ctx.lineWidth = 1 / scale;
+
+            const startX = Math.floor(worldView.left / step) * step;
+            for (let x = startX; x <= worldView.right; x += step) {
+                ctx.beginPath(); ctx.moveTo(x, worldView.bottom); ctx.lineTo(x, worldView.top); ctx.stroke();
+            }
+
+            const startY = Math.floor(worldView.bottom / step) * step;
+            for (let y = startY; y <= worldView.top; y += step) {
+                ctx.beginPath(); ctx.moveTo(worldView.left, y); ctx.lineTo(worldView.right, y); ctx.stroke();
+            }
+
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
+            ctx.lineWidth = 1.5 / scale;
+            ctx.beginPath(); ctx.moveTo(worldView.left, 0); ctx.lineTo(worldView.right, 0); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(0, worldView.bottom); ctx.lineTo(0, worldView.top); ctx.stroke();
+
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.5)';
+            const fontSize = 10 / scale;
+            ctx.font = `${fontSize}px Inter`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const numStep = step * Math.max(1, Math.floor(step / (25 * scale)));
+
+            for (let x = Math.floor(startX / numStep) * numStep; x <= worldView.right; x += numStep) {
+                if (x === 0) continue;
+                ctx.save(); ctx.translate(x, fontSize * 1.5); ctx.scale(1, -1); ctx.fillText(x, 0, 0); ctx.restore();
+            }
+
+            ctx.textAlign = 'right';
+            for (let y = Math.floor(startY / numStep) * numStep; y <= worldView.top; y += numStep) {
+                if (y === 0) continue;
+                ctx.save(); ctx.translate(-fontSize * 1.5, y); ctx.scale(1, -1); ctx.fillText(y, 0, 0); ctx.restore();
+            }
+        }
+
+
+        function drawArm(theta1, theta2) {
+            const { j1, endEffector } = getArmState(theta1, theta2);
+            ctx.lineCap = 'round';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+            ctx.lineWidth = 8 / scale;
+            ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(j1.x, j1.y); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(j1.x, j1.y); ctx.lineTo(endEffector.x, endEffector.y); ctx.stroke();
+
+            ctx.fillStyle = '#00c3ff';
+            const baseRadius = 12 / scale;
+            const jointRadius = 10 / scale;
+            ctx.beginPath(); ctx.arc(0, 0, baseRadius, 0, 2 * Math.PI); ctx.fill();
+            ctx.beginPath(); ctx.arc(j1.x, j1.y, jointRadius, 0, 2 * Math.PI); ctx.fill();
+        }
+
+        function drawReachableRange() {
+            ctx.strokeStyle = 'rgba(0, 195, 255, 0.3)';
+            ctx.lineWidth = 2 / scale;
+            ctx.setLineDash([5 / scale, 5 / scale]);
+            ctx.beginPath(); ctx.arc(0, 0, l1 + l2, 0, 2 * Math.PI); ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        function drawTarget() {
+            if (!target) return;
+            ctx.strokeStyle = '#ff0064';
+            ctx.lineWidth = 3 / scale;
+            const crosshairSize = 10 / scale;
+            ctx.beginPath();
+            ctx.moveTo(target.x - crosshairSize, target.y - crosshairSize);
+            ctx.lineTo(target.x + crosshairSize, target.y + crosshairSize);
+            ctx.moveTo(target.x + crosshairSize, target.y - crosshairSize);
+            ctx.lineTo(target.x - crosshairSize, target.y + crosshairSize);
+            ctx.stroke();
+        }
+
+        function drawObstacle(isColliding) {
+            const grad = ctx.createRadialGradient(obstacle.x, obstacle.y, obstacle.radius * 0.5, obstacle.x, obstacle.y, obstacle.radius);
+            if (isColliding) {
+                grad.addColorStop(0, 'rgba(255, 100, 100, 0.9)'); grad.addColorStop(1, 'rgba(255, 0, 0, 0.4)');
+                ctx.strokeStyle = '#ff0000';
+            } else {
+                grad.addColorStop(0, 'rgba(255, 200, 0, 0.9)'); grad.addColorStop(1, 'rgba(255, 165, 0, 0.4)');
+                ctx.strokeStyle = '#ffa500';
+            }
+            ctx.fillStyle = grad;
+            ctx.lineWidth = 2 / scale;
+            ctx.beginPath(); ctx.arc(obstacle.x, obstacle.y, obstacle.radius, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+        }
+
+        // --- IK & Collision ---
+        function shortestAngleDist(a1, a2) {
+            const max = Math.PI * 2;
+            const da = (a2 - a1) % max;
+            return 2 * da % max - da;
+        }
+
+        function solveInverseKinematics(x_target, y_target, currentAngles) {
+            const dist = Math.sqrt(x_target ** 2 + y_target ** 2);
+            if (dist > l1 + l2 || dist < Math.abs(l1 - l2)) return null;
+
+            const D1 = (x_target ** 2 + y_target ** 2 - l1 ** 2 - l2 ** 2) / (2 * l1 * l2);
+
+            // Solution 1 (elbow down)
+            const theta2_sol1 = -Math.acos(D1);
+            const theta1_sol1 = Math.atan2(y_target, x_target) - Math.atan2(l2 * Math.sin(theta2_sol1), l1 + l2 * Math.cos(theta2_sol1));
+            const sol1 = { theta1: theta1_sol1, theta2: theta2_sol1 };
+
+            // Solution 2 (elbow up)
+            const theta2_sol2 = -theta2_sol1; // +Math.acos(D1)
+            const theta1_sol2 = Math.atan2(y_target, x_target) - Math.atan2(l2 * Math.sin(theta2_sol2), l1 + l2 * Math.cos(theta2_sol2));
+            const sol2 = { theta1: theta1_sol2, theta2: theta2_sol2 };
+
+            // Calculate cost (shortest distance) to choose the best solution
+            const cost1 = Math.abs(shortestAngleDist(currentAngles.theta1, sol1.theta1)) + Math.abs(shortestAngleDist(currentAngles.theta2, sol1.theta2));
+            const cost2 = Math.abs(shortestAngleDist(currentAngles.theta1, sol2.theta1)) + Math.abs(shortestAngleDist(currentAngles.theta2, sol2.theta2));
+
+            return cost1 < cost2 ? sol1 : sol2;
+        }
+
+        function checkCollision() {
+            const armState = getArmState(currentTheta1, currentTheta2);
+            const isColliding = lineCircleCollision({ x: 0, y: 0 }, armState.j1, obstacle) || lineCircleCollision(armState.j1, armState.endEffector, obstacle);
+            collisionStatus.classList.toggle('bg-red-500', isColliding);
+            collisionStatus.classList.toggle('bg-green-500', !isColliding);
+            return isColliding;
+        }
+
+        function lineCircleCollision(p1, p2, circle) {
+            const lenSq = (p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2; if (lenSq === 0) return false;
+            let t = ((circle.x - p1.x) * (p2.x - p1.x) + (circle.y - p1.y) * (p2.y - p1.y)) / lenSq;
+            t = Math.max(0, Math.min(1, t));
+            const closestX = p1.x + t * (p2.x - p1.x), closestY = p1.y + t * (p2.y - p1.y);
+            return ((closestX - circle.x) ** 2 + (closestY - circle.y) ** 2) < circle.radius ** 2;
+        }
+
+        function getArmState(theta1, theta2) {
+            const j1 = { x: l1 * Math.cos(theta1), y: l1 * Math.sin(theta1) };
+            const endEffector = { x: j1.x + l2 * Math.cos(theta1 + theta2), y: j1.y + l2 * Math.sin(theta1 + theta2) };
+            return { j1, endEffector };
+        }
+
+        // --- Main Loop ---
+        function draw() {
+            if (!ctx) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(base.x + panOffset.x, base.y + panOffset.y);
+            ctx.scale(scale, -scale);
+
+            drawGridAndNumbers();
+            drawReachableRange();
+            drawTarget();
+
+            const isColliding = checkCollision();
+            drawObstacle(isColliding);
+            drawArm(currentTheta1, currentTheta2);
+
+            ctx.restore();
+        }
+
+        function animate(timestamp) {
+            if (!animationStartTime) animationStartTime = timestamp;
+            const elapsed = timestamp - animationStartTime;
+            const progress = Math.min(elapsed / animationDuration, 1);
+
+            // --- FIX: Interpolate along the shortest angular path ---
+            const deltaTheta1 = shortestAngleDist(startAngles.theta1, targetAngles.theta1);
+            const deltaTheta2 = shortestAngleDist(startAngles.theta2, targetAngles.theta2);
+            currentTheta1 = startAngles.theta1 + deltaTheta1 * progress;
+            currentTheta2 = startAngles.theta2 + deltaTheta2 * progress;
+
+            draw();
+            if (progress < 1) {
+                animationId = requestAnimationFrame(animate);
+            } else {
+                // Ensure final position is exact
+                currentTheta1 = targetAngles.theta1;
+                currentTheta2 = targetAngles.theta2;
+                draw();
+                animationStartTime = null;
+                geminiAnalysisBtn.disabled = false;
+            }
+        }
+
+        function updateUI(angles) {
+            theta1Display.textContent = `${toDegrees(angles.theta1).toFixed(2)}°`;
+            theta2Display.textContent = `${toDegrees(angles.theta2).toFixed(2)}°`;
+            const displayX = target ? Math.round(target.x) : 0;
+            const displayY = target ? Math.round(target.y) : 0;
+            targetDisplay.textContent = (`${displayX}, ${displayY}`);
+        }
+
+        // --- Event Handlers ---
+        function getMouseWorldPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const worldX = (mouseX - (base.x + panOffset.x)) / scale;
+            const worldY = -(mouseY - (base.y + panOffset.y)) / scale;
+            return { x: worldX, y: worldY };
+        }
+
+        function handleTargetSelection(worldX, worldY) {
+            geminiAnalysisBtn.disabled = true;
+            const targetRelativeToBase = { x: worldX, y: worldY };
+            l1 = parseInt(l1Input.value); l2 = parseInt(l2Input.value);
+            const angles = solveInverseKinematics(targetRelativeToBase.x, targetRelativeToBase.y, { theta1: currentTheta1, theta2: currentTheta2 });
+
+            if (angles) {
+                unreachableModal.classList.add('hidden');
+                startAngles = { theta1: currentTheta1, theta2: currentTheta2 };
+                targetAngles = angles;
+                target = targetRelativeToBase;
+                lastMovementData = { l1, l2, startAngles, targetAngles, target: targetRelativeToBase };
+                updateUI(angles);
+                if (animationId) cancelAnimationFrame(animationId);
+                animationStartTime = null;
+                animationId = requestAnimationFrame(animate);
+            } else {
+                lastUnreachableTarget = targetRelativeToBase;
+                unreachableModal.classList.remove('hidden');
+                target = null;
+                draw();
+            }
+        }
+
+        canvas.addEventListener('click', (e) => {
+            const dist = Math.sqrt((e.clientX - startPanPoint.x) ** 2 + (e.clientY - startPanPoint.y) ** 2);
+            if (dist > 3) { return; }
+            const worldPos = getMouseWorldPos(e);
+            handleTargetSelection(worldPos.x, worldPos.y);
+        });
+
+        setTargetBtn.addEventListener('click', () => {
+            const x = parseFloat(targetXInput.value);
+            const y = parseFloat(targetYInput.value);
+            if (isNaN(x) || isNaN(y)) {
+                alert("Please enter valid numerical coordinates for X and Y.");
+                return;
+            }
+            handleTargetSelection(x, y);
+        });
+
+        [l1Input, l2Input].forEach(input => input.addEventListener('change', () => {
+            l1 = parseInt(l1Input.value);
+            l2 = parseInt(l2Input.value);
+            target = null;
+            draw();
+        }));
+
+        toggleControlsBtn.addEventListener('click', () => {
+            const icon = document.getElementById('toggle-icon');
+            controlsVisible = !controlsVisible;
+            controlPanelContent.classList.toggle('hidden');
+            icon.style.transform = controlsVisible ? 'rotate(0deg)' : 'rotate(180deg)';
+            setTimeout(resizeCanvas, 50);
+        });
+
+        function updateObstacle() {
+            obstacle.x = parseFloat(obstacleXInput.value) || 0;
+            obstacle.y = parseFloat(obstacleYInput.value) || 0;
+            obstacle.radius = parseFloat(obstacleRadiusInput.value) || 10;
+            draw();
+        }
+
+        [obstacleXInput, obstacleYInput, obstacleRadiusInput].forEach(input => {
+            input.addEventListener('input', updateObstacle);
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // --- Pan and Zoom Event Handlers ---
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomIntensity = 0.1;
+            const scroll = e.deltaY < 0 ? (1 + zoomIntensity) : (1 - zoomIntensity);
+
+            const rect = canvas.getBoundingClientRect();
+            const mouseScreenX = e.clientX - rect.left;
+            const mouseScreenY = e.clientY - rect.top;
+
+            const oldScale = scale;
+            scale *= scroll;
+            scale = Math.max(0.2, Math.min(5, scale));
+
+            panOffset.x = mouseScreenX + (panOffset.x - mouseScreenX) * (scale / oldScale);
+            panOffset.y = mouseScreenY + (panOffset.y - mouseScreenY) * (scale / oldScale);
+
+            draw();
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            startPanPoint = { x: e.clientX, y: e.clientY };
+            isPanning = true;
+            canvas.style.cursor = 'grabbing';
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            const dx = e.clientX - startPanPoint.x;
+            const dy = e.clientY - startPanPoint.y;
+            panOffset.x += dx;
+            panOffset.y += dy;
+            startPanPoint = { x: e.clientX, y: e.clientY };
+            draw();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isPanning = false;
+            canvas.style.cursor = 'crosshair';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isPanning = false;
+            canvas.style.cursor = 'crosshair';
+        });
+
+        // Gemini Event Handlers
+        geminiAnalysisBtn.addEventListener('click', async () => {
+            if (!lastMovementData) return;
+            const { l1, l2, startAngles, targetAngles, target } = lastMovementData;
+            const systemPrompt = "You are a distinguished robotics professor, adept at explaining complex topics to both university students and industry experts. Your explanations must be layered, starting with a simple, high-level overview before diving into rigorous technical detail. Use markdown for clear structure and LaTeX for all mathematical formulas.";
+            const userQuery = `Analyze the movement of a 2-joint robotic arm with L1=${l1} and L2=${l2}.
+- Target Coordinate: (${target.x.toFixed(1)}, ${target.y.toFixed(1)})
+- Final Angles: $θ_1=${toDegrees(targetAngles.theta1).toFixed(1)}°$, $θ_2=${toDegrees(targetAngles.theta2).toFixed(1)}°$
+
+Please provide a detailed analysis with the following structure:
+1.  *### Motion Summary:* An intuitive, high-level description of the arm's movement.
+2.  *### Kinematic Deep Dive:* A rigorous, technical breakdown of the inverse kinematics solution. Explain how the final angles were calculated using the Law of Cosines. Detail why this specific 'elbow-up' or 'elbow-down' solution was chosen over the alternative for path efficiency. Include all relevant LaTeX equations.
+3.  *### Path Optimization Note:* Explain the concept of using the shortest angular distance for interpolation to ensure smooth and efficient animation, especially when crossing the ±180° boundary.
+4.  *### Real-World Analogs:* List and briefly describe two real-world robots that use similar 2-joint kinematic principles.`;
+            const payload = {
+                payload: { contents: [{ parts: [{ text: userQuery }] }] },
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+            const responseText = await callGemini(payload);
+            if (responseText) {
+                geminiAnalysisContent.innerHTML = marked.parse(responseText);
+                if (window.renderMathInElement) {
+                    renderMathInElement(geminiAnalysisContent, {
+                        delimiters: [
+                            { left: '$$', right: '$$', display: true },
+                            { left: '$', right: '$', display: false }
+                        ]
+                    });
+                }
+                geminiAnalysisModal.classList.remove('hidden');
+            }
+        });
+
+        explainProcessBtn.addEventListener('click', async () => {
+            const systemPrompt = "You are a senior mechatronics engineer mentoring a student. Your task is to provide a comprehensive, step-by-step explanation of the core concepts behind this 2D robotic arm simulation. The tone must be educational, clear, and encouraging. Structure the response for a mixed audience of students and experts by providing an intuitive overview followed by a technical deep-dive for each concept. Use markdown for formatting and LaTeX for all mathematical formulas.";
+            const userQuery = `Please provide a detailed, multi-layered explanation for a project presentation on this 2-joint robotic arm simulation. For each of the following four topics, provide both an "Intuitive Overview" and a "Technical Deep Dive":
+
+1.  *The Core Problem: Inverse Kinematics*
+    * Intuitive Overview: What is it in simple terms? Why is it fundamental to robotics?
+    * Technical Deep Dive: Define it formally. Discuss the challenges like multiple solutions and singularities in the context of a 2-DOF planar manipulator.
+
+2.  *The Geometric Solution*
+    * Intuitive Overview: How do we form a triangle to solve the problem?
+    * Technical Deep Dive: Provide a full, step-by-step derivation using the Law of Cosines to find both $θ_2$ and $θ_1$. Explain how both possible solutions (elbow-up/down) arise from the math. Include all necessary LaTeX equations.
+
+3.  *Animating the Path*
+    * Intuitive Overview: How does the arm move smoothly from point A to B instead of just teleporting?
+    * Technical Deep Dive: Explain linear interpolation (Lerp) of joint angles. Crucially, detail the importance of interpolating along the shortest angular path (using an atan2 or similar modular arithmetic approach) to handle "wraparound" at the ±180° boundary.
+
+4.  *Collision Detection*
+    * Intuitive Overview: How does the simulation know if the arm hits the obstacle?
+    * Technical Deep Dive: Describe the algorithm for checking line-segment-to-circle intersection. Explain how to find the closest point on the line segment to the circle's center and compare its distance to the circle's radius.`;
+            const payload = {
+                payload: { contents: [{ parts: [{ text: userQuery }] }] },
+                systemInstruction: { parts: [{ text: systemPrompt }] }
+            };
+            const responseText = await callGemini(payload);
+            if (responseText) {
+                processExplanationContent.innerHTML = marked.parse(responseText);
+                if (window.renderMathInElement) {
+                    renderMathInElement(processExplanationContent, {
+                        delimiters: [
+                            { left: '$$', right: '$$', display: true },
+                            { left: '$', right: '$', display: false }
+                        ]
+                    });
+                }
+                processExplanationModal.classList.remove('hidden');
+            }
+        });
+
+        geminiSuggestBtn.addEventListener('click', async () => {
+            if (!lastUnreachableTarget) return;
+            const { x, y } = lastUnreachableTarget;
+            const systemPrompt = "You are a helpful assistant for a robotics simulation. You suggest a new, reachable target coordinate on the edge of the arm's workspace, in the same direction as the user's unreachable target. Respond ONLY with the specified JSON object.";
+            const userQuery = `A robotic arm with L1=${l1} and L2=${l2} (total reach of ${l1 + l2}) failed to reach (${x}, ${y}). Calculate a new target by normalizing the vector (${x}, ${y}) and multiplying it by the total reach.`;
+            const payload = {
+                payload: { contents: [{ parts: [{ text: userQuery }] }] },
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { responseMimeType: "application/json", responseSchema: { type: "OBJECT", properties: { "new_x": { "type": "NUMBER" }, "new_y": { "type": "NUMBER" } }, required: ["new_x", "new_y"] } }
+            };
+            const responseJsonString = await callGemini(payload);
+            if (responseJsonString) {
+                try {
+                    const { new_x, new_y } = JSON.parse(responseJsonString);
+                    unreachableModal.classList.add('hidden');
+                    handleTargetSelection(new_x, new_y);
+                } catch (e) { console.error("Failed to parse JSON from Gemini:", e); alert("Received an invalid suggestion."); }
+            }
+        });
+
+        // --- Initialization ---
+        resizeCanvas();
+    </script>
+</body>
+
+</html>
